@@ -25,7 +25,7 @@ public class CommentService {
   private final PostRepository postRepository;
   private final CommentRepository commentRepository;
 
-  public void createComment(CommentCreateRequest commentCreateRequest) {
+  public CommentInfoDto createComment(CommentCreateRequest commentCreateRequest) {
 
     Post post = postRepository.findById(commentCreateRequest.getPostId())
         .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 게시글입니다."));
@@ -39,6 +39,8 @@ public class CommentService {
     newComment.setCommentContent(commentCreateRequest.getCommentContent());
 
     commentRepository.save(newComment);
+
+    return new CommentInfoDto(newComment);
   }
 
   public CommentInfoDto getCommentById(Long commentId) {
@@ -49,7 +51,7 @@ public class CommentService {
     return new CommentInfoDto(comment);
   }
 
-  public void updateComment(Long commentId, CommentUpdateRequest commentUpdateRequest) {
+  public CommentInfoDto updateComment(Long commentId, CommentUpdateRequest commentUpdateRequest) {
 
     Comment comment = commentRepository.findById(commentId)
         .orElseThrow(() -> new IllegalArgumentException("해당 ID의 댓글을 찾을 수 없습니다."));
@@ -57,6 +59,8 @@ public class CommentService {
     comment.setCommentContent(commentUpdateRequest.getCommentContent());
 
     commentRepository.save(comment);
+
+    return new CommentInfoDto(comment);
   }
 
   public void deleteComment(Long commentId) {

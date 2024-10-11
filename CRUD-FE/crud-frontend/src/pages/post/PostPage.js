@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   Container,
@@ -7,6 +7,7 @@ import {
   CircularProgress,
   Box,
   Avatar,
+  IconButton,
   Button,
   TextField,
   List,
@@ -14,31 +15,37 @@ import {
   ListItemAvatar,
   ListItemText,
   Divider,
+  InputAdornment, // Import InputAdornment
 } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack"; // 뒤로가기 아이콘
-import EditIcon from "@mui/icons-material/Edit"; // 수정 아이콘
-import DeleteIcon from "@mui/icons-material/Delete"; // 삭제 아이콘
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import ClearIcon from "@mui/icons-material/Clear";
 
 const PostPage = () => {
-  const { postId } = useParams(); // URL에서 postId 가져오기
+  const { boardId } = useParams();
+  const { postId } = useParams();
+  const navigate = useNavigate();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [comments, setComments] = useState([]); // 댓글 상태 추가
-  const [commentContent, setCommentContent] = useState(""); // 댓글 입력 상태 추가
-  const [editingCommentId, setEditingCommentId] = useState(null); // 수정할 댓글 ID
-  const [page, setPage] = useState(0); // 댓글 페이지 상태
-  const [hasMoreComments, setHasMoreComments] = useState(true); // 더 가져올 댓글이 있는지 상태
+  const [comments, setComments] = useState([]);
+  const [commentContent, setCommentContent] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [page, setPage] = useState(0);
+  const [hasMoreComments, setHasMoreComments] = useState(true);
 
-  const userId = localStorage.getItem("userId"); // 로컬 스토리지에서 userId 가져오기
+  const userId = localStorage.getItem("userId");
+  const observer = useRef(); // IntersectionObserver 사용을 위한 ref
+  const commentInputRef = useRef();
 
   const fetchPost = async () => {
     setLoading(true);
     try {
       const response = await axios.get(
         `http://localhost:8080/api/posts/${postId}`
-      ); // API 호출
-      setPost(response.data); // 게시글 데이터 저장
+      );
+      setPost(response.data);
     } catch (err) {
       setError("게시글을 불러오는 중 오류가 발생했습니다.");
     } finally {
@@ -53,14 +60,24 @@ const PostPage = () => {
       const response = await axios.get(
         `http://localhost:8080/api/posts/${postId}/comments`,
         {
-          params: { page, size: 5 }, // 페이지와 크기 파라미터 추가
+          params: { page, size: 10 }, // 페이지와 크기 파라미터 추가
         }
       );
       const newComments = response.data.content;
 
-      setComments((prevComments) =>
-        initialFetch ? newComments : [...prevComments, ...newComments]
-      ); // 초기 가져오기일 경우 새 댓글로 교체
+      setComments((prevComments) => {
+        const allComments = initialFetch
+          ? newComments
+          : [...prevComments, ...newComments];
+
+        // 중복된 commentId 제거
+        const uniqueComments = allComments.filter(
+          (comment, index, self) =>
+            index === self.findIndex((c) => c.commentId === comment.commentId)
+        );
+        return uniqueComments;
+      });
+
       setHasMoreComments(newComments.length > 0); // 새로운 댓글이 있는지 여부 설정
     } catch (err) {
       setError("댓글을 불러오는 중 오류가 발생했습니다.");
@@ -69,67 +86,121 @@ const PostPage = () => {
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    if (!commentContent) return; // 댓글 내용이 없으면 리턴
+    if (!commentContent) return;
+
+    if (editingCommentId) {
+      await updateComment();
+    } else {
+      await createComment();
+    }
+  };
+
+  const createComment = async () => {
+    const confirmCreate = window.confirm("댓글을 작성하시겠습니까?");
+    if (!confirmCreate) return;
 
     try {
-      if (editingCommentId) {
-        // 댓글 수정 로직
-        const response = await axios.put(
-          `http://localhost:8080/api/comments/${editingCommentId}`,
-          {
-            content: commentContent,
-          }
-        );
-        setComments((prevComments) =>
-          prevComments.map((comment) =>
-            comment.commentId === editingCommentId ? response.data : comment
-          )
-        );
-        setEditingCommentId(null); // 수정 모드 종료
-      } else {
-        // 새 댓글 작성 로직
-        const response = await axios.post(
-          `http://localhost:8080/api/posts/${postId}/comments`,
-          {
-            content: commentContent,
-          }
-        );
-        setComments((prevComments) => [...prevComments, response.data]); // 새 댓글 추가
-      }
-      setCommentContent(""); // 입력 필드 초기화
-      setPage(0); // 댓글 작성 후 페이지를 초기화
-      fetchComments(); // 댓글 작성 후 댓글 다시 가져오기
+      const response = await axios.post(`http://localhost:8080/api/comments`, {
+        postId: postId,
+        userId: userId,
+        commentContent: commentContent,
+      });
+
+      // 응답에서 작성자 정보를 포함하여 댓글 추가
+      setComments((prevComments) => [response.data, ...prevComments]);
+
+      setCommentContent("");
+      fetchComments(true); // 새로운 댓글을 가져옴
     } catch (err) {
       setError("댓글 작성 중 오류가 발생했습니다.");
     }
   };
 
+  const updateComment = async () => {
+    const confirmUpdate = window.confirm("댓글을 수정하시겠습니까?");
+    if (!confirmUpdate) return;
+
+    try {
+      const response = await axios.put(
+        `http://localhost:8080/api/comments/${editingCommentId}`,
+        {
+          commentContent: commentContent,
+        }
+      );
+      setComments((prevComments) =>
+        prevComments.map((comment) =>
+          comment.commentId === editingCommentId ? response.data : comment
+        )
+      );
+      setCommentContent("");
+      setEditingCommentId(null);
+    } catch (err) {
+      setError("댓글 수정 중 오류가 발생했습니다.");
+    }
+  };
+
   const handleEditComment = (comment) => {
-    setCommentContent(comment.commentContent); // 댓글 내용 설정
-    setEditingCommentId(comment.commentId); // 수정할 댓글 ID 설정
+    setCommentContent(comment.commentContent);
+    setEditingCommentId(comment.commentId);
+    // 댓글 입력 영역으로 스크롤
+    if (commentInputRef.current) {
+      const inputPosition = commentInputRef.current.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({
+        top: inputPosition - 200, // 100px 만큼 위로 스크롤
+        behavior: "smooth"
+      });
+    }
   };
 
   const handleDeleteComment = async (commentId) => {
+    const confirmDelete = window.confirm("댓글을 삭제하시겠습니까?");
+    if (!confirmDelete) return;
+
     try {
-      await axios.delete(`http://localhost:8080/api/comments/${commentId}`); // 댓글 삭제 API 호출
+      await axios.delete(`http://localhost:8080/api/comments/${commentId}`);
       setComments((prevComments) =>
         prevComments.filter((comment) => comment.commentId !== commentId)
-      ); // 댓글 목록에서 삭제
+      );
     } catch (err) {
       setError("댓글 삭제 중 오류가 발생했습니다.");
     }
   };
 
+  const handleDeletePost = async () => {
+    const confirmPost = window.confirm("게시글을 삭제하시겠습니까?");
+    if (!confirmPost) return;
+
+    try {
+      await axios.delete(`http://localhost:8080/api/posts/${postId}`);
+      // 게시글 삭제 후 게시글 목록 페이지로 이동
+      navigate(`/board/${boardId}`);
+    } catch (err) {
+      setError("게시글 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 마지막 댓글 감지를 위한 IntersectionObserver 콜백
+  const lastCommentRef = useCallback(
+    (node) => {
+      if (loading) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMoreComments) {
+          setPage((prevPage) => prevPage + 1);
+        }
+      });
+      if (node) observer.current.observe(node);
+    },
+    [loading, hasMoreComments]
+  );
+
   useEffect(() => {
-    fetchPost(); // 컴포넌트 마운트 시 게시글 데이터 가져오기
+    fetchPost();
   }, [postId]);
 
   useEffect(() => {
-    // 게시글을 가져온 후 댓글을 가져오기
-    if (post) {
-      fetchComments(true); // 게시글을 가져온 후 댓글 첫 페이지를 가져오도록 설정
-    }
-  }, [post]); // post가 변경될 때마다 댓글 첫 페이지 가져오기
+    fetchComments();
+  }, [page]); // page가 변경될 때마다 댓글 가져오기
 
   if (loading) {
     return (
@@ -150,15 +221,13 @@ const PostPage = () => {
   }
 
   const { postTitle, postContent, postWriterInfoDto, createdAt, modifiedAt } =
-    post; // updatedAt 추가
+    post;
 
   return (
     <Container sx={{ marginTop: 4 }}>
-      {" "}
-      {/* 좌우 여백 설정 */}
       <Button
         startIcon={<ArrowBackIcon />}
-        onClick={() => window.history.back()}
+        onClick={() => navigate(`/board/${boardId}`)} // navigate로 수정
         variant="outlined"
         sx={{
           mb: 3,
@@ -167,7 +236,7 @@ const PostPage = () => {
           "&:hover": { backgroundColor: "#e3f2fd" },
         }}
       >
-        뒤로 가기
+        목록
       </Button>
       <Typography
         variant="h4"
@@ -180,10 +249,10 @@ const PostPage = () => {
         작성자: {postWriterInfoDto.nickname}
       </Typography>
       <Typography variant="body2" color="#777">
-        작성일: {new Date(createdAt).toLocaleDateString()} {/* 작성일 추가 */}
+        작성일: {new Date(createdAt).toLocaleDateString()}
       </Typography>
       <Typography variant="body2" color="#777">
-        수정일: {new Date(modifiedAt).toLocaleDateString()} {/* 수정일 추가 */}
+        수정일: {new Date(modifiedAt).toLocaleDateString()}
       </Typography>
       <Typography
         variant="body1"
@@ -192,7 +261,6 @@ const PostPage = () => {
         {postContent}
       </Typography>
       <Divider sx={{ mb: 2 }} />
-      {/* 게시글 수정 및 삭제 버튼 */}
       {postWriterInfoDto.userId === userId && (
         <Box sx={{ mb: 2, display: "flex", justifyContent: "flex-end" }}>
           <Button
@@ -204,15 +272,17 @@ const PostPage = () => {
               color: "#1976d2",
               "&:hover": { backgroundColor: "#e3f2fd" },
             }}
+            onClick={() => navigate(`/board/${boardId}/post/${postId}/edit`)}
           >
-            게시글 수정
+            수정
           </Button>
           <Button
             variant="outlined"
             color="error"
             sx={{ "&:hover": { backgroundColor: "#ffebee" } }}
+            onClick={handleDeletePost}
           >
-            게시글 삭제
+            삭제
           </Button>
         </Box>
       )}
@@ -231,6 +301,7 @@ const PostPage = () => {
           alignItems="center"
         >
           <TextField
+            inputRef={commentInputRef}
             fullWidth
             variant="outlined"
             placeholder="댓글을 입력하세요..."
@@ -238,68 +309,79 @@ const PostPage = () => {
             onChange={(e) => setCommentContent(e.target.value)}
             sx={{
               mr: 1,
-              height: "48px", // 높이 설정
+              height: "48px",
               "& .MuiOutlinedInput-root": {
-                height: "48px", // 높이 설정
+                height: "48px",
               },
-            }} // 오른쪽 여백 추가
+            }}
+            InputProps={{
+              endAdornment: commentContent && ( // 댓글 내용이 있을 때만 "x" 버튼 보이기
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={() => setCommentContent("")} // 클릭 시 입력 필드 비우기
+                    edge="end"
+                  >
+                    <ClearIcon />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
           <Button
             type="submit"
             variant="contained"
             color="primary"
             sx={{
-              width: "48px", // 너비 설정
-              height: "48px", // 높이 설정
+              width: "48px",
+              height: "48px",
               backgroundColor: "#1976d2",
               color: "#fff",
               "&:hover": { backgroundColor: "#1565c0" },
-              borderRadius: "8px", // 둥근 모서리
-              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)", // 그림자 효과 추가
+              borderRadius: "8px",
+              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
             }}
+            disabled={!commentContent} // 필드가 비어있으면 버튼 비활성화
           >
             작성
           </Button>
         </Box>
 
         <List>
-          {comments.map((comment) => (
-            <ListItem
-              key={comment.commentId}
-              sx={{ mb: 2, backgroundColor: "#f9f9f9", borderRadius: "5px" }}
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ bgcolor: "#1976d2" }}>
-                  {comment.commentWriterInfoDto.nickname.charAt(0)}
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText
-                primary={comment.commentWriterInfoDto.nickname || "익명"}
-                secondary={comment.commentContent} // 댓글 내용
-                secondaryTypographyProps={{ sx: { color: "#555" } }} // 댓글 내용 색상
-              />
-              <Box>
-                {/* 댓글 수정 및 삭제 버튼 */}
+          {comments.map((comment, index) => {
+            const isLastComment = comments.length === index + 1;
+
+            return (
+              <ListItem
+                ref={isLastComment ? lastCommentRef : null} // 마지막 댓글에 ref 추가
+                key={comment.commentId}
+                sx={{ mb: 2, backgroundColor: "#f9f9f9", borderRadius: "8px" }}
+              >
+                <ListItemAvatar>
+                  <Avatar>{comment.commentWriterInfoDto.nickname[0]}</Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={comment.commentWriterInfoDto.nickname}
+                  secondary={comment.commentContent}
+                />
                 {comment.commentWriterInfoDto.userId === userId && (
-                  <>
-                    <Button
-                      onClick={() => handleEditComment(comment)}
-                      sx={{ color: "#1976d2", ml: 1 }}
-                    >
+                  <Box>
+                    <Button onClick={() => handleEditComment(comment)}>
                       <EditIcon fontSize="small" />
                     </Button>
                     <Button
                       onClick={() => handleDeleteComment(comment.commentId)}
-                      sx={{ color: "error.main" }}
+                      color="error"
                     >
                       <DeleteIcon fontSize="small" />
                     </Button>
-                  </>
+                  </Box>
                 )}
-              </Box>
-            </ListItem>
-          ))}
+              </ListItem>
+            );
+          })}
         </List>
+
+        {loading && <CircularProgress />}
       </Box>
     </Container>
   );

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   Grid,
   Container,
@@ -11,8 +11,10 @@ import {
   Box,
   Avatar,
   Button,
-} from '@mui/material';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+  TextField,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add"; // 추가 버튼 아이콘
+import ExpandLessIcon from "@mui/icons-material/ExpandLess"; // 위로가기 버튼 아이콘
 
 const BoardPage = () => {
   const { boardId } = useParams();
@@ -23,40 +25,50 @@ const BoardPage = () => {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
-  const [board, setBoard] = useState(null); // 게시판 정보를 저장할 상태 추가
+  const [board, setBoard] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const observer = useRef();
 
-  const fetchPosts = useCallback(async (page) => {
-    setLoading(true);
-    try {
-      const response = await axios.get(
-        `http://localhost:8080/api/boards/${boardId}/posts`,
-        { params: { page, size: 10 } }
-      );
-      const newPosts = response.data.content;
-  
-      setPosts((prevPosts) => {
-        const postIds = prevPosts.map(post => post.postId);
-        const filteredPosts = newPosts.filter(post => !postIds.includes(post.postId));
-        return [...prevPosts, ...filteredPosts];
-      });
-  
-      setHasMore(newPosts.length > 0);
-    } catch (err) {
-      setError('게시글을 불러오는 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  }, [boardId]);
-  
+  // 게시글 가져오기
+  const fetchPosts = useCallback(
+    async (page) => {
+      setLoading(true);
+      try {
+        const response = await axios.get(
+          `http://localhost:8080/api/boards/${boardId}/posts`,
+          { params: { page, size: 10, keyword: searchQuery } } // keyword를 사용
+        );
+        const newPosts = response.data.content;
+
+        setPosts((prevPosts) => {
+          const postIds = prevPosts.map((post) => post.postId);
+          const filteredPosts = newPosts.filter(
+            (post) => !postIds.includes(post.postId)
+          );
+          return [...prevPosts, ...filteredPosts];
+        });
+
+        setHasMore(newPosts.length > 0);
+      } catch (err) {
+        setError("게시글을 불러오는 중 오류가 발생했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [boardId, searchQuery]
+  );
+
+  // 게시판 정보 가져오기
   const fetchBoard = useCallback(async () => {
     try {
-      const response = await axios.get(`http://localhost:8080/api/boards/${boardId}`);
+      const response = await axios.get(
+        `http://localhost:8080/api/boards/${boardId}`
+      );
       setBoard(response.data);
     } catch (err) {
-      setError('게시판 정보를 불러오는 중 오류가 발생했습니다.');
+      setError("게시판 정보를 불러오는 중 오류가 발생했습니다.");
     }
-  }, [boardId]);  
+  }, [boardId]);
 
   useEffect(() => {
     setPosts([]);
@@ -96,21 +108,36 @@ const BoardPage = () => {
   };
 
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener("scroll", handleScroll);
     };
   }, []);
 
   const scrollToTop = () => {
     window.scrollTo({
       top: 0,
-      behavior: 'smooth',
+      behavior: "smooth",
     });
   };
 
   const handlePostClick = (postId) => {
-    navigate(`/post/${postId}`); // 게시글 상세 페이지로 이동
+    navigate(`/board/${boardId}/post/${postId}`);
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchQuery(event.target.value);
+  };
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    setPosts([]); // 검색 시 기존 게시글 목록 초기화
+    setPage(0); // 페이지도 초기화
+    fetchPosts(0); // 검색 후 첫 페이지 게시글 가져오기
+  };
+
+  const handleCreatePost = () => {
+    navigate(`/board/${boardId}/create`);
   };
 
   if (error) {
@@ -120,38 +147,86 @@ const BoardPage = () => {
   return (
     <Container>
       <Box mt={4} mb={2} textAlign="center">
-        {board && ( // 게시판 이름이 있는 경우에만 표시
+        {board && (
           <Typography variant="h4" gutterBottom fontWeight="bold">
             {board.boardName}
           </Typography>
         )}
         <Typography variant="body1" color="textSecondary">
-          {hasMore ? '스크롤하여 더 많은 게시글을 확인하세요' : '더 이상 게시글이 없습니다'}
+          {hasMore
+            ? "스크롤하여 더 많은 게시글을 확인하세요"
+            : "더 이상 게시글이 없습니다"}
         </Typography>
+      </Box>
+
+      <Box mt={3} mb={4} textAlign="center">
+        <form onSubmit={handleSearchSubmit}>
+          <TextField
+            variant="outlined"
+            placeholder="게시글 검색..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            size="small"
+            sx={{
+              mr: 1,
+              width: "300px",
+              height: "40px", // 높이를 설정
+              "& .MuiOutlinedInput-root": {
+                // 테두리 높이 통일
+                height: "40px",
+              },
+            }}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            sx={{
+              height: "40px", // 높이를 설정
+            }}
+          >
+            검색
+          </Button>
+        </form>
       </Box>
 
       <Grid container spacing={3}>
         {posts.map((post, index) => {
-          const { postId, postTitle, postContent, postWriterInfoDto, createdAt } = post;
+          const {
+            postId,
+            postTitle,
+            postContent,
+            postWriterInfoDto,
+            createdAt,
+          } = post;
 
           return (
-            <Grid item xs={12} sm={6} key={postId} sx={{ mb: 2 }} ref={posts.length === index + 1 ? lastPostElementRef : null}>
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              key={postId}
+              sx={{ mb: 2 }}
+              ref={posts.length === index + 1 ? lastPostElementRef : null}
+            >
               <Card
                 variant="outlined"
                 sx={{
-                  height: '100%',
+                  height: "100%",
                   padding: 1,
-                  backgroundColor: '#fafafa',
+                  backgroundColor: "#fafafa",
                   borderRadius: 2,
-                  transition: '0.3s',
-                  cursor: 'pointer',
-                  '&:hover': { boxShadow: 6 }
+                  transition: "0.3s",
+                  cursor: "pointer",
+                  "&:hover": { boxShadow: 6 },
                 }}
-                onClick={() => handlePostClick(postId)} // 클릭 시 게시글 상세 페이지로 이동
+                onClick={() => handlePostClick(postId)}
               >
                 <CardContent>
-                  <Box display="flex" alignItems="center" mb={1}>
-                    <Avatar sx={{ mr: 2, bgcolor: '#1976d2' }}>{postWriterInfoDto.nickname.charAt(0)}</Avatar>
+                  <Box display="flex" alignItems="center" mb={2}>
+                    <Avatar sx={{ mr: 2, bgcolor: "#1976d2" }}>
+                      {postWriterInfoDto.nickname.charAt(0)}
+                    </Avatar>
                     <Box>
                       <Typography variant="subtitle1" fontWeight="bold">
                         {postWriterInfoDto.nickname}
@@ -168,14 +243,14 @@ const BoardPage = () => {
                     variant="body2"
                     color="textSecondary"
                     sx={{
-                      wordWrap: 'break-word',
-                      display: '-webkit-box',
-                      WebkitBoxOrient: 'vertical',
+                      wordWrap: "break-word",
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
                       WebkitLineClamp: 3,
-                      overflow: 'hidden',
+                      overflow: "hidden",
                     }}
                   >
-                    {postContent}Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+                    {postContent}
                   </Typography>
                 </CardContent>
               </Card>
@@ -190,32 +265,50 @@ const BoardPage = () => {
         </Box>
       )}
 
-      {/* Scroll to Top 버튼 */}
       {showScrollToTop && (
         <Button
           variant="contained"
           sx={{
-            position: 'fixed',
+            position: "fixed",
             bottom: 20,
-            right: 20,
+            left: 20,
             zIndex: 1000,
-            borderRadius: '50%', // 원형 버튼
-            backgroundColor: '#282c34', // 배경색
-            color: 'white', // 글자색
-            width: 56, // 버튼 너비
-            height: 56, // 버튼 높이
+            borderRadius: "50%",
+            backgroundColor: "#282c34",
+            color: "white",
+            width: 56,
+            height: 56,
             boxShadow: 3,
-            transition: 'background-color 0.3s, transform 0.3s',
-            '&:hover': {
-              backgroundColor: '#66bb6a', // hover시 색상 변경
-              transform: 'scale(1.05)', // hover시 크기 변화
+            transition: "background-color 0.3s, transform 0.3s",
+            "&:hover": {
+              backgroundColor: "#66bb6a",
+              transform: "scale(1.05)",
             },
           }}
           onClick={scrollToTop}
         >
-          <ArrowUpwardIcon /> {/* 화살표 아이콘 */}
+          <ExpandLessIcon /> {/* 둥근 세모 아이콘 */}
         </Button>
       )}
+
+      {/* 글쓰기 버튼에 '+' 아이콘 추가 */}
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={handleCreatePost}
+        sx={{
+          position: "fixed",
+          bottom: 20,
+          right: 20,
+          zIndex: 1000,
+          borderRadius: "50%",
+          width: 56,
+          height: 56,
+          boxShadow: 3,
+        }}
+      >
+        <AddIcon />
+      </Button>
     </Container>
   );
 };

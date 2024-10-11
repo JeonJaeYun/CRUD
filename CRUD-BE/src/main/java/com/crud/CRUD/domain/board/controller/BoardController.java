@@ -61,9 +61,12 @@ public class BoardController {
   }
 
   @GetMapping("/{boardId}/posts")
-  public ResponseEntity<Page<PostInfoDto>> getPostsByBoardId(@PathVariable Long boardId,
+  public ResponseEntity<Page<PostInfoDto>> getPostsByBoardId(
+      @PathVariable Long boardId,
+      @RequestParam(required = false) String keyword, // keyword 검색
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size) {
-    return ResponseEntity.status(HttpStatus.OK).body(postService.getPostsByBoardId(boardId, page, size));
+
+    return ResponseEntity.status(HttpStatus.OK).body(postService.getPostsByBoardId(boardId, keyword, page, size));
   }
 }

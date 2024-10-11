@@ -73,7 +73,7 @@ public class InitDB {
 
   private void createInitialComments() {
     List<Post> posts = postRepository.findAll(); // 저장된 모든 게시물 가져오기
-    for (int i = 1; i <= 1000; i++) {
+    for (int i = 1; i <= 3000; i++) {
       Comment comment = new Comment();
       comment.setCommentContent("댓글 내용 " + i);
       // 랜덤하게 게시물 할당

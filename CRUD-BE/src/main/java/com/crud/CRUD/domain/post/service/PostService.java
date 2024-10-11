@@ -86,15 +86,17 @@ public class PostService {
     return postsPage.map(PostInfoDto::new);
   }
 
-  public Page<PostInfoDto> getPostsByBoardId(Long boardId, int page, int size) {
-
+  public Page<PostInfoDto> getPostsByBoardId(Long boardId, String keyword, int page, int size) {
     Board board = boardRepository.findById(boardId)
         .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 게시판입니다."));
 
     Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
-    Page<Post> postsPage = postRepository.findByBoard(board, pageable);
+    if (keyword == null || keyword.isEmpty()) {
+      return postRepository.findByBoard(board, pageable).map(PostInfoDto::new);
+    }
 
-    return postsPage.map(PostInfoDto::new);
+    return postRepository.findByBoardAndPostTitleContainingOrPostContentContaining(board, keyword, keyword, pageable).map(PostInfoDto::new);
   }
+
 }

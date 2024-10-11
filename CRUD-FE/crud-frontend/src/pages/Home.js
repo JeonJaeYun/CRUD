@@ -71,7 +71,7 @@ function Home() {
             <Card
               key={index}
               component={Link}
-              to={`/post/${post.postId}`}
+              to={`/board/${post.boardInfoDto.boardId}/post/${post.postId}`}
               sx={{
                 textDecoration: "none",
                 boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.1)",

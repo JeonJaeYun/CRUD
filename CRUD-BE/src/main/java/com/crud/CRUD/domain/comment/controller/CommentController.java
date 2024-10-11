@@ -26,9 +26,8 @@ public class CommentController {
   private final CommentService commentService;
 
   @PostMapping
-  public ResponseEntity<String> createComment(@RequestBody CommentCreateRequest commentRequestDto) {
-    commentService.createComment(commentRequestDto);
-    return ResponseEntity.status(HttpStatus.CREATED).body("댓글 작성 완료");
+  public ResponseEntity<CommentInfoDto> createComment(@RequestBody CommentCreateRequest commentRequestDto) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(commentService.createComment(commentRequestDto));
   }
 
   @GetMapping("/{commentId}")
@@ -37,10 +36,9 @@ public class CommentController {
   }
 
   @PutMapping("/{commentId}")
-  public ResponseEntity<String> updateComment(@PathVariable Long commentId, @RequestBody
+  public ResponseEntity<CommentInfoDto> updateComment(@PathVariable Long commentId, @RequestBody
   CommentUpdateRequest commentUpdateRequest) {
-    commentService.updateComment(commentId, commentUpdateRequest);
-    return ResponseEntity.status(HttpStatus.OK).body("댓글 수정 완료");
+    return ResponseEntity.status(HttpStatus.OK).body(commentService.updateComment(commentId, commentUpdateRequest));
   }
 
   @DeleteMapping("/{commentId}")
