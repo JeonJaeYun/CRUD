@@ -98,18 +98,17 @@ const PostPage = () => {
   const createComment = async () => {
     const confirmCreate = window.confirm("댓글을 작성하시겠습니까?");
     if (!confirmCreate) return;
-
+  
     try {
       const response = await axios.post(`http://localhost:8080/api/comments`, {
         postId: postId,
         userId: userId,
         commentContent: commentContent,
       });
-
-      // 응답에서 작성자 정보를 포함하여 댓글 추가
-      setComments((prevComments) => [response.data, ...prevComments]);
-
-      setCommentContent("");
+  
+      // 댓글 작성 후 페이지 초기화 및 새로운 댓글 가져오기
+      setPage(0);  // 페이지를 0으로 초기화
+      setCommentContent("");  // 입력 필드 초기화
       fetchComments(true); // 새로운 댓글을 가져옴
     } catch (err) {
       setError("댓글 작성 중 오류가 발생했습니다.");
@@ -155,12 +154,12 @@ const PostPage = () => {
   const handleDeleteComment = async (commentId) => {
     const confirmDelete = window.confirm("댓글을 삭제하시겠습니까?");
     if (!confirmDelete) return;
-
+  
     try {
       await axios.delete(`http://localhost:8080/api/comments/${commentId}`);
-      setComments((prevComments) =>
-        prevComments.filter((comment) => comment.commentId !== commentId)
-      );
+      // 댓글 삭제 후 페이지 초기화 및 새로운 댓글 가져오기
+      setPage(0);  // 페이지를 0으로 초기화
+      fetchComments(true);  // 새로운 댓글을 가져옴
     } catch (err) {
       setError("댓글 삭제 중 오류가 발생했습니다.");
     }
