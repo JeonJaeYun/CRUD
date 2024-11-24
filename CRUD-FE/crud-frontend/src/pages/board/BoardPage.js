@@ -137,7 +137,19 @@ const BoardPage = () => {
   };
 
   const handleCreatePost = () => {
-    navigate(`/board/${boardId}/create`);
+    const nickname = localStorage.getItem("nickname");
+    const userId = localStorage.getItem("userId");
+
+    if (!userId || !nickname) {
+      // 유저 정보가 없다면 로그인 필요 알림
+      const confirmLogin = window.confirm("로그인이 필요한 서비스입니다. 로그인 페이지로 이동하시겠습니까?");
+      if (confirmLogin) {
+        navigate("/login");  // 로그인 페이지로 이동
+      }
+    } else {
+      // 유저 정보가 있으면 글쓰기 페이지로 이동
+      navigate(`/board/${boardId}/create`);
+    }
   };
 
   if (error) {
@@ -250,7 +262,12 @@ const BoardPage = () => {
                       overflow: "hidden",
                     }}
                   >
-                    {postContent}
+                    {postContent.split("\n").map((line, index) => (
+                      <React.Fragment key={index}>
+                        {line}
+                        <br />
+                      </React.Fragment>
+                    ))}
                   </Typography>
                 </CardContent>
               </Card>

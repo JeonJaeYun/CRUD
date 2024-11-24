@@ -21,6 +21,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ClearIcon from "@mui/icons-material/Clear";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess"; // 위로가기 버튼 아이콘
 
 const PostPage = () => {
   const { boardId } = useParams();
@@ -34,6 +35,7 @@ const PostPage = () => {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [page, setPage] = useState(0);
   const [hasMoreComments, setHasMoreComments] = useState(true);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
 
   const userId = localStorage.getItem("userId");
   const observer = useRef(); // IntersectionObserver 사용을 위한 ref
@@ -96,22 +98,38 @@ const PostPage = () => {
   };
 
   const createComment = async () => {
-    const confirmCreate = window.confirm("댓글을 작성하시겠습니까?");
-    if (!confirmCreate) return;
-  
-    try {
-      const response = await axios.post(`http://localhost:8080/api/comments`, {
-        postId: postId,
-        userId: userId,
-        commentContent: commentContent,
-      });
-  
-      // 댓글 작성 후 페이지 초기화 및 새로운 댓글 가져오기
-      setPage(0);  // 페이지를 0으로 초기화
-      setCommentContent("");  // 입력 필드 초기화
-      fetchComments(true); // 새로운 댓글을 가져옴
-    } catch (err) {
-      setError("댓글 작성 중 오류가 발생했습니다.");
+    const nickname = localStorage.getItem("nickname");
+    const userId = localStorage.getItem("userId");
+
+    if (!userId || !nickname) {
+      // 유저 정보가 없다면 로그인 필요 알림
+      const confirmLogin = window.confirm("로그인이 필요한 서비스입니다. 로그인 페이지로 이동하시겠습니까?");
+      if (confirmLogin) {
+        navigate("/login");  // 로그인 페이지로 이동
+      }
+    } else {
+      const confirmCreate = window.confirm("댓글을 작성하시겠습니까?");
+      if (!confirmCreate) return;
+    
+      try {
+        const response = await axios.post(`http://localhost:8080/api/comments`, {
+          postId: postId,
+          userId: userId,
+          commentContent: commentContent,
+        });
+    
+        const newComment = response.data;  // 새로 작성된 댓글
+
+        // 새 댓글을 기존 댓글 목록에 추가
+        setComments((prevComments) => [newComment, ...prevComments]);
+
+        // 댓글 작성 후 페이지 초기화 및 새로운 댓글 가져오기
+        setPage(0);  // 페이지를 0으로 초기화
+        setCommentContent("");  // 입력 필드 초기화
+        fetchComments(true); // 새로운 댓글을 가져옴
+      } catch (err) {
+        setError("댓글 작성 중 오류가 발생했습니다.");
+      }
     }
   };
 
@@ -193,6 +211,28 @@ const PostPage = () => {
     [loading, hasMoreComments]
   );
 
+  const handleScroll = () => {
+    if (window.scrollY > 300) {
+      setShowScrollToTop(true);
+    } else {
+      setShowScrollToTop(false);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
   useEffect(() => {
     fetchPost();
   }, [postId]);
@@ -257,7 +297,12 @@ const PostPage = () => {
         variant="body1"
         sx={{ mt: 3, mb: 3, lineHeight: 1.6, color: "#444" }}
       >
-        {postContent}
+        {postContent.split("\n").map((line, index) => (
+          <React.Fragment key={index}>
+            {line}
+            <br />
+          </React.Fragment>
+        ))}
       </Typography>
       <Divider sx={{ mb: 2 }} />
       {postWriterInfoDto.userId === userId && (
@@ -381,6 +426,31 @@ const PostPage = () => {
         </List>
 
         {loading && <CircularProgress />}
+        {showScrollToTop && (
+        <Button
+          variant="contained"
+          sx={{
+            position: "fixed",
+            bottom: 20,
+            left: 20,
+            zIndex: 1000,
+            borderRadius: "50%",
+            backgroundColor: "#282c34",
+            color: "white",
+            width: 56,
+            height: 56,
+            boxShadow: 3,
+            transition: "background-color 0.3s, transform 0.3s",
+            "&:hover": {
+              backgroundColor: "#66bb6a",
+              transform: "scale(1.05)",
+            },
+          }}
+          onClick={scrollToTop}
+        >
+          <ExpandLessIcon /> {/* 둥근 세모 아이콘 */}
+        </Button>
+      )}
       </Box>
     </Container>
   );
